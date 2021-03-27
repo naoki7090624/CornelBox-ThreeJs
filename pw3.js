@@ -178,23 +178,56 @@ function main() {
 
   var light_gui;
   var guis;
+  var shadow_gui;
+  var shadow_folder;
 
   {
+    // const color = 0xFFFFFF;
+    // const intensity = 1;
+    // light_gui = new THREE.AmbientLight(color, intensity);
+    // scene.add(light_gui);
+    // guis = new GUI();
+    // guis.domElement.id = ("Light");
+    // var gui = guis.addFolder('ambient light');
+    // gui.addColor(new ColorGUIHelper(light_gui, 'color'), 'value').name('color');
+    // gui.add(light_gui, 'intensity', 0, 2, 0.01);
+    // gui.open();
+    //shadowGUI(light_gui);
+    //lights("directional");
+
+
     const color = 0xFFFFFF;
     const intensity = 1;
-    light_gui = new THREE.AmbientLight(color, intensity);
+    light_gui = new THREE.DirectionalLight(color, intensity);
+    light_gui.position.set(0, 20, 0);
+    light_gui.target.position.set(0, 0, 0);
+    light_gui.castShadow = true;
     scene.add(light_gui);
+    scene.add(light_gui.target);
     guis = new GUI();
     guis.domElement.id = ("Light");
-    var gui = guis.addFolder('ambient light');
+
+    updateLight();
+    
+    //var gui = new GUI();
+    var gui = guis.addFolder('directional');
     gui.addColor(new ColorGUIHelper(light_gui, 'color'), 'value').name('color');
     gui.add(light_gui, 'intensity', 0, 2, 0.01);
+    makeXYZGUI(gui, light_gui.target.position, 'target', updateLight);
     gui.open();
+    shadowGUI(light_gui,"directional");
   }
 
   var lights = function(v) {
     guis.destroy();
+
     scene.remove(light_gui);
+    // console.log(shadow_gui);
+    // if (!shadow_gui){
+    // }
+    // else{
+    //   shadow_gui.destroy();
+    // }
 
     function makeXYZGUI(gui, vector3, name, onChangeFn) {
       const folder = gui.addFolder(name);
@@ -215,6 +248,7 @@ function main() {
       case "directional":
         light_gui = new THREE.DirectionalLight(color, intensity);
         light_gui.position.set(0, 20, 0);
+        light_gui.target.position.set(0, 0, 0);
         light_gui.castShadow = true;
         scene.add(light_gui);
         scene.add(light_gui.target);
@@ -227,7 +261,7 @@ function main() {
         gui.add(light_gui, 'intensity', 0, 2, 0.01);
         makeXYZGUI(gui, light_gui.target.position, 'target', updateLight);
         gui.open();
-
+        shadowGUI(light_gui,v);
         break;
 
       case "spot":
@@ -245,6 +279,7 @@ function main() {
         gui.add(light_gui, 'penumbra', 0, 1, 0.01);
         makeXYZGUI(gui, light_gui.target.position, 'target', updateLight);
         gui.open();
+        shadowGUI(light_gui,v);
 
         break;
 
@@ -266,6 +301,7 @@ function main() {
         const skyColor = 0xB1E1FF;  // light blue
         const groundColor = 0xB97A20;  // brownish orange
         light_gui = new THREE.HemisphereLight(skyColor, groundColor, intensity);
+        //light.castShadow = true;
         scene.add(light_gui);
 
         //var gui = new GUI();
@@ -284,7 +320,6 @@ function main() {
   
   var list = ['directional', 'point', 'spot', 'hemisphere'];
   var ui = new UIL.Gui({ css:'top:10px; left:10px;', size:100});
-
   //ui.add('list', { target:document.body, list:list, name:'list', pos:{ left:'10px', top:'500px' }, simple:true }).onChange( lights );
   ui.add('list', { list:list, name:'list' }).onChange( lights );
 
@@ -318,6 +353,118 @@ function main() {
     //scene.add( target)    
     //const gui = new GUI();
     //gui.add(light, 'intensity', 0, 3, 0.01);
+  }
+
+  function makeXYZGUI(gui, vector3, name, onChangeFn) {
+    const folder = gui.addFolder(name);
+    folder.add(vector3, 'x', -10, 10).onChange(onChangeFn);
+    folder.add(vector3, 'y', 0, 10).onChange(onChangeFn);
+    folder.add(vector3, 'z', -10, 10).onChange(onChangeFn);
+    folder.open();
+  }
+  function updateLight() {
+    light_gui.target.updateMatrixWorld();
+  }
+
+  function shadowGUI(light,v){
+    function makeXYZGUI(gui, vector3, name, onChangeFn) {
+      const folder = gui.addFolder(name);
+      folder.add(vector3, 'x', -10, 10).onChange(onChangeFn);
+      folder.add(vector3, 'y', 0, 20).onChange(onChangeFn);
+      folder.add(vector3, 'z', -10, 10).onChange(onChangeFn);
+      // folder.open();
+    }
+
+    const cameraHelper = new THREE.CameraHelper(light.shadow.camera);
+    //scene.add(cameraHelper);
+
+    //const helper = new THREE.DirectionalLightHelper(light);
+    //scene.add(helper);
+
+    function updateCamera() {
+      // update the light target's matrixWorld because it's needed by the helper
+      light.target.updateMatrixWorld();
+      //helper.update();
+      // update the light's shadow camera's projection matrix
+      light.shadow.camera.updateProjectionMatrix();
+      // and now update the camera helper we're using to show the light's shadow camera
+      cameraHelper.update();
+    }
+    updateCamera();
+
+    class DimensionGUIHelper {
+      constructor(obj, minProp, maxProp) {
+        this.obj = obj;
+        this.minProp = minProp;
+        this.maxProp = maxProp;
+      }
+      get value() {
+        return this.obj[this.maxProp] * 2;
+      }
+      set value(v) {
+        this.obj[this.maxProp] = v /  2;
+        this.obj[this.minProp] = v / -2;
+      }
+    }
+
+    class MinMaxGUIHelper {
+      constructor(obj, minProp, maxProp, minDif) {
+        this.obj = obj;
+        this.minProp = minProp;
+        this.maxProp = maxProp;
+        this.minDif = minDif;
+      }
+      get min() {
+        return this.obj[this.minProp];
+      }
+      set min(v) {
+        this.obj[this.minProp] = v;
+        this.obj[this.maxProp] = Math.max(this.obj[this.maxProp], v + this.minDif);
+      }
+      get max() {
+        return this.obj[this.maxProp];
+      }
+      set max(v) {
+        this.obj[this.maxProp] = v;
+        this.min = this.min;  // this will call the min setter
+      }
+    }
+
+    console.log(shadow_gui);
+    if (!shadow_gui){
+    }
+    else{
+      shadow_gui.destroy();
+    }
+
+    shadow_gui = new GUI();
+    shadow_gui.domElement.id = ("ShadowCamera");
+    //gui.addColor(new ColorGUIHelper(light, 'color'), 'value').name('color');
+    //gui.add(light, 'intensity', 0, 2, 0.01);
+    if (v=="directional"){
+      const folder = shadow_gui.addFolder('Shadow Camera');
+      folder.open();
+      folder.add(new DimensionGUIHelper(light.shadow.camera, 'left', 'right'), 'value', 0, 20)
+        .name('width')
+        .onChange(updateCamera);
+      folder.add(new DimensionGUIHelper(light.shadow.camera, 'bottom', 'top'), 'value', 0, 20)
+        .name('height')
+        .onChange(updateCamera);
+      const minMaxGUIHelper = new MinMaxGUIHelper(light.shadow.camera, 'near', 'far', 0.1);
+      folder.add(minMaxGUIHelper, 'min', 0.1, 20, 0.1).name('near').onChange(updateCamera);
+      folder.add(minMaxGUIHelper, 'max', 0.1, 20, 0.1).name('far').onChange(updateCamera);
+      folder.add(light.shadow.camera, 'zoom', 0.01, 1.5, 0.01).onChange(updateCamera);
+    }
+    else if(v=="spot"){
+      const folder = shadow_gui.addFolder('Shadow Camera');
+      folder.open();
+      const minMaxGUIHelper = new MinMaxGUIHelper(light.shadow.camera, 'near', 'far', 0.1);
+      folder.add(minMaxGUIHelper, 'min', 0.1, 20, 0.1).name('near').onChange(updateCamera);
+      folder.add(minMaxGUIHelper, 'max', 0.1, 20, 0.1).name('far').onChange(updateCamera);
+    }
+
+    makeXYZGUI(shadow_gui, light.position, 'position', updateCamera);
+    makeXYZGUI(shadow_gui, light.target.position, 'target', updateCamera);
   }
 
 
